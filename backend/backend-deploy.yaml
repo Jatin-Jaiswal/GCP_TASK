@@ -1,0 +1,96 @@
+# Kubernetes Secret to store sensitive credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gcp-task-db-secret
+type: Opaque
+stringData:
+  DB_PASS: Terabhaisidhemaut_3
+---
+# Kubernetes ConfigMap for non-sensitive configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gcp-task-config
+data:
+  # Cloud SQL details
+  DB_HOST: "10.68.32.3"
+  DB_NAME: "postgres"
+  DB_USER: "postgres"
+  
+  # Redis details
+  REDIS_HOST: "10.68.33.3"
+  REDIS_PORT: "6379"
+
+  # Pub/Sub topic
+  PUBSUB_TOPIC: "gcp-task-messages"
+---
+# Deployment for the Java backend application
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gcp-task-backend
+  labels:
+    app: java-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: java-backend
+  template:
+    metadata:
+      labels:
+        app: java-backend
+    spec:
+      serviceAccountName: java-backend-sa
+      containers:
+      - name: java-backend-container
+        image: asia-south2-docker.pkg.dev/secure-gcp-task-20250917/gcp-task-images/java-backend:latest
+        ports:
+        - containerPort: 8080
+        env:
+          - name: SPRING_DATASOURCE_URL
+            value: "jdbc:postgresql://$(DB_HOST):5432/$(DB_NAME)"
+          - name: SPRING_DATASOURCE_USERNAME
+            valueFrom:
+              configMapKeyRef:
+                name: gcp-task-config
+                key: DB_USER
+          - name: SPRING_DATA_REDIS_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: gcp-task-config
+                key: REDIS_HOST
+          - name: GCP_PUBSUB_TOPIC
+            valueFrom:
+              configMapKeyRef:
+                name: gcp-task-config
+                key: PUBSUB_TOPIC
+          - name: SPRING_DATASOURCE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: gcp-task-db-secret
+                key: DB_PASS
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+# Service for the backend
+apiVersion: v1
+kind: Service
+metadata:
+  name: gcp-task-backend-service
+  labels:
+    app: java-backend
+spec:
+  type: ClusterIP
+  selector:
+    app: java-backend
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
