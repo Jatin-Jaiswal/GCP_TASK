@@ -11,8 +11,12 @@
 # IDE
 .vscode/
 
-# Secrets
+# Secrets and credentials
 credentials.json
+cloudsql-key.json
+*.key.json
+*.p12
+*.pem
 
 # Logs
 *.log
